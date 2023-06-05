@@ -2,8 +2,9 @@ import torch
 from torch import nn
 import numpy as np
 from backbone import build_resnet
-from basic import Conv, SPP
-from loss import compute_loss
+from .basic import Conv, SPP
+from .loss import compute_loss
+from numpy.typing import NDArray
 
 
 class MyYOLO(nn.Module):
@@ -82,8 +83,11 @@ class MyYOLO(nn.Module):
         return grid_xy
 
     def set_grid(self, input_size):
-        # 用于重置grid_xy
-        pass
+        """
+            用于重置G矩阵。
+        """
+        self.input_size = input_size
+        self.grid_cell = self.create_grid(input_size)
 
     def decode_boxes(self, pred):
         """
@@ -101,7 +105,7 @@ class MyYOLO(nn.Module):
         """
         output = torch.zeros_like(pred)
         # 得到所有bbox 的中心点坐标和宽高
-        pred[..., :2] = torch.sigmoid(pred[..., 2]) + self.grid_cell
+        pred[..., :2] = torch.sigmoid(pred[..., :2]) + self.grid_cell
         pred[..., 2:] = torch.exp(pred[..., 2:])
 
         # 将所有bbox的中心坐标和高宽换算成x1,y1,x2,y2的形式
@@ -145,7 +149,7 @@ class MyYOLO(nn.Module):
 
         return keep
 
-    def postprocess(self, bboxes, scores):
+    def postprocess(self, bboxes: NDArray, scores: NDArray):
         """
         Input:
             bboxes: [HxW, 4]
@@ -162,32 +166,32 @@ class MyYOLO(nn.Module):
         经过后处理后，我们得到了最终可以输出的三个检测：
             a) bboxes：包含每一个检测框的x1,y1,x2,y2坐标；
             b) scores：包含每一个检测框的得分；
-            c) cls_inds：包含每一个检测框的预测类别序号。
+            c) cls_idxs：包含每一个检测框的预测类别序号。
         """
-        labels = torch.argmax(scores, dim=1)
-        scores = scores[torch.arange(scores.shape[0]), labels]
+        labels = np.argmax(scores, axis=1)
+        scores = scores[np.arange(scores.shape[0]), labels]
 
         # threshold
         # 首先进行阈值筛选，滤除那些得分低的检测框
-        keep = torch.nonzero(scores >= self.conf_thresh)
+        keep = np.where(scores >= self.conf_thresh)
         bboxes = bboxes[keep]
         scores = scores[keep]
         labels = labels[keep]
 
         # NMS
         # 对每一类去进行NMS
-        keep = torch.zeros(len(bboxes), dtype=torch.int)
+        keep = np.zeros(len(bboxes), dtype=int)
         for i in range(self.num_classes):
-            inds = torch.nonzero(labels == i).flatten()
-            if len(inds) == 0:
+            idxs = np.where(labels == i)[0]
+            if len(idxs) == 0:
                 continue
-            c_bboxes = bboxes[inds]
-            c_scores = scores[inds]
+            c_bboxes = bboxes[idxs]
+            c_scores = scores[idxs]
             c_keep = self.nms(c_bboxes, c_scores)
-            keep[inds[c_keep]] = 1
+            keep[idxs[c_keep]] = 1
 
         # 获得最终的检测结果
-        keep = torch.nonzero(keep > 0).flatten()
+        keep = np.where(keep > 0)
         bboxes = bboxes[keep]
         scores = scores[keep]
         labels = labels[keep]

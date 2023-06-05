@@ -1,3 +1,5 @@
+import os
+
 import torch
 import torch.utils.data as data
 import os.path as osp
@@ -82,7 +84,7 @@ class VOCDetection(data.Dataset):
 
     def __init__(self, root, img_size=None, image_sets=[('2007', 'trainval'), ('2012', 'trainval')], transform=None,
                  target_transform=VOCAnnotationTransform(), dataset_name='VOC0712'):
-        self.root = root
+        self.root = root  # root指定到`VOC2012`所在的目录
         self.img_size = img_size
         self.image_set = image_sets
         self.transform = transform  # 这个self.transform变量就是用来预处理VOC数据的，处理好的数据即可用于网络训练或测试。
@@ -93,6 +95,8 @@ class VOCDetection(data.Dataset):
         self.ids = list()
         for (year, name) in image_sets:
             rootpath = osp.join(self.root, 'VOC' + year)
+            if not os.path.exists(rootpath):
+                continue
             for line in open(osp.join(rootpath, 'ImageSets', 'Main', name + '.txt')):
                 self.ids.append((rootpath, line.strip()))
 

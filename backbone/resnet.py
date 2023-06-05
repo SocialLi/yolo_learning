@@ -190,8 +190,10 @@ def resnet18(pretrained=False, **kwargs):
     """
     model = ResNet(BasicBlock, [2, 2, 2, 2], **kwargs)
     if pretrained:
-        # model.load_state_dict(model_zoo.load_url(model_urls['resnet18']), strict=False)
-        model.load_state_dict(torch.load('../weights/resnet18-5c106cde.pth'), strict=False)
+        if os.path.exists("../weights/resnet18-5c106cde.pth"):
+            model.load_state_dict(torch.load('../weights/resnet18-5c106cde.pth'), strict=False)
+        else:
+            model.load_state_dict(model_zoo.load_url(model_urls['resnet18']), strict=False)
     return model
 
 

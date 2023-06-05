@@ -1,7 +1,14 @@
 import argparse
 import os
 import torch
-from data.transform import BaseTransform
+import torch.utils.data
+from data.transform import BaseTransform, Augmentation
+from data.voc0712 import VOCDetection
+from evaluator.vocapi_evaluator import VOCAPIEvaluator
+from utils.misc import detection_collate
+from utils.com_paras_flops import FLOPs_and_Params
+from models.build import build_yolo
+from copy import deepcopy
 
 
 def parse_args():
@@ -36,17 +43,19 @@ def parse_args():
 
     # 数据集参数
     parser.add_argument('-d', '--dataset', default='voc', help='voc or coco')
-    parser.add_argument('--root', default='D:/code/PycharmProjects/yolo_learning/data/dataset',
-                        help='data root')
+    parser.add_argument('--root', default='/home/zeyi/PycharmProjects/yolo_learning/data/dataset',
+                        help='data root')  # root指定到VOCdevkit所在目录
 
     return parser.parse_args()
 
 
 def train():
+    # 创建命令行参数
     args = parse_args()
     print("Setting Arguments.. : ", args)
     print("----------------------------------------------------------")
 
+    # 保存模型的路径
     path_to_save = os.path.join(args.save_folder, args.dataset, args.version)
     os.makedirs(path_to_save, exist_ok=True)  # exist_ok为True，则在目标目录已经存在的情况下不会触发FileExistsError异常
 
@@ -55,9 +64,10 @@ def train():
         print('use cuda')
         device = torch.device('cuda')
     else:
+        print('use cpu')
         device = torch.device('cpu')
 
-    # 是否使用多尺度训练
+    # 是否使用多尺度训练技巧
     if args.multi_scale:
         print('use the multi-scale trick ...')
         train_size = 640
@@ -67,18 +77,61 @@ def train():
         val_size = 416
 
     # 构建dataset类
-    build_dataset(args, device, train_size, val_size)
+    dataset, num_classes, evaluator = build_dataset(args, device, train_size, val_size)
+
+    # 构建dataloader类
+    dataloader = build_dataloader(args, dataset)
+
+    # 构建模型
+    model = build_yolo(args, device, train_size, num_classes, trainable=True)
+    model.to(device).train()
+
+    # 计算模型的FLOPs和参数量
+    model_copy = deepcopy(model)
+    model_copy.trainable = False
+    model_copy.eval()
+    model_copy.set_grid(val_size)
+    FLOPs_and_Params(model_copy, val_size, device)
+    del model_copy
+
+
+
+
 
 
 def build_dataset(args, device, train_size, val_size):
     pixel_mean = (0.406, 0.456, 0.485)  # BGR
     pixel_std = (0.225, 0.224, 0.229)  # BGR
-    # train_transform = Augu
+    train_transform = Augmentation(train_size, pixel_mean, pixel_std)
     val_transform = BaseTransform(val_size, pixel_mean, pixel_std)
+
+    # 构建dataset
+    if args.dataset == 'voc':
+        data_root = os.path.join(args.root, 'VOCdevkit')
+        # 加载voc数据集
+        num_classes = 20
+        dataset = VOCDetection(data_root, transform=train_transform)
+        evaluator = VOCAPIEvaluator()
+    else:
+        print('unknown dataset!! Only support vod!!!')
+        exit(0)
+
+    print('Training model on:', args.dataset)
+    print('The dataset size:', len(dataset))
+
+    return dataset, num_classes, evaluator
 
 
 def build_dataloader(args, dataset):
-    pass
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        collate_fn=detection_collate,
+        num_workers=args.num_workers,
+        pin_memory=True
+    )
+    return dataloader
 
 
 if __name__ == '__main__':
