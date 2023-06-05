@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import numpy as np
+from typing import List
+from torch import Tensor
 
 
 class MSEWithLogitsLoss(nn.Module):
@@ -67,6 +69,15 @@ def generate_dxdywh(gt_label, w, h, s):
 
 
 def gt_creator(input_size, stride, label_lists=[]):
+    # type: (int, int, List[List]) -> Tensor
+    """
+    :param input_size: 图片经过一些列变换，最终输入网络的大小
+    :param stride: 网络的最大下采样倍率
+    :param label_lists: 标注信息列表
+    :return: Tensor[B, H*W, 1+1+4+1]。
+        H和W是输入图片经过stride下采样后的高和宽（最终特征图的高和宽）。
+        1+1+4+1，分别是置信度（1）、类别标签（1）、边界框（4）、边界框回归权重（1）
+    """
     # 必要的参数
     batch_size = len(label_lists)
     w = input_size

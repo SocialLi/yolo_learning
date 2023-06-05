@@ -1,10 +1,10 @@
 import torch
-from torch import nn
+from torch import nn, Tensor
 import numpy as np
 from backbone import build_resnet
 from .basic import Conv, SPP
 from .loss import compute_loss
-from numpy.typing import NDArray
+from typing import List
 
 
 class MyYOLO(nn.Module):
@@ -115,6 +115,7 @@ class MyYOLO(nn.Module):
         return output
 
     def nms(self, bboxes, scores):
+        # type: (Tensor, Tensor) -> List[int]
         """Pure Python NMS baseline."""
         x1 = bboxes[:, 0]  # xmin
         y1 = bboxes[:, 1]  # ymin
@@ -122,11 +123,11 @@ class MyYOLO(nn.Module):
         y2 = bboxes[:, 3]  # ymax
 
         areas = (x2 - x1) * (y2 - y1)
-        order: torch.Tensor = torch.argsort(scores, dim=-1, descending=True)  # 按照降序对bbox的得分进行排序
+        order: Tensor = torch.argsort(scores, dim=-1, descending=True)  # 按照降序对bbox的得分进行排序
 
         keep = []  # 用于保存经过筛选的最终bbox结果
         while order.numel() > 0:
-            i = order[0]
+            i = order[0].item()
             keep.append(i)
             # 计算当前bbox（序号为order[0]）与剩下bbox的iou
             # 计算交集的左上角点和右下角点的坐标
@@ -149,7 +150,7 @@ class MyYOLO(nn.Module):
 
         return keep
 
-    def postprocess(self, bboxes: NDArray, scores: NDArray):
+    def postprocess(self, bboxes: Tensor, scores: Tensor):
         """
         Input:
             bboxes: [HxW, 4]
@@ -166,32 +167,32 @@ class MyYOLO(nn.Module):
         经过后处理后，我们得到了最终可以输出的三个检测：
             a) bboxes：包含每一个检测框的x1,y1,x2,y2坐标；
             b) scores：包含每一个检测框的得分；
-            c) cls_idxs：包含每一个检测框的预测类别序号。
+            c) cls_inds：包含每一个检测框的预测类别序号。
         """
-        labels = np.argmax(scores, axis=1)
-        scores = scores[np.arange(scores.shape[0]), labels]
+        labels = torch.argmax(scores, dim=1)
+        scores = scores[torch.arange(scores.shape[0]), labels]
 
         # threshold
         # 首先进行阈值筛选，滤除那些得分低的检测框
-        keep = np.where(scores >= self.conf_thresh)
+        keep = torch.nonzero(scores >= self.conf_thresh).flatten()
         bboxes = bboxes[keep]
         scores = scores[keep]
         labels = labels[keep]
 
         # NMS
         # 对每一类去进行NMS
-        keep = np.zeros(len(bboxes), dtype=int)
+        keep = torch.zeros(bboxes.shape[0], dtype=torch.int)
         for i in range(self.num_classes):
-            idxs = np.where(labels == i)[0]
-            if len(idxs) == 0:
+            inds = torch.nonzero(labels == i).flatten()
+            if inds.numel() == 0:
                 continue
-            c_bboxes = bboxes[idxs]
-            c_scores = scores[idxs]
+            c_bboxes = bboxes[inds]
+            c_scores = scores[inds]
             c_keep = self.nms(c_bboxes, c_scores)
-            keep[idxs[c_keep]] = 1
+            keep[inds[c_keep]] = 1
 
         # 获得最终的检测结果
-        keep = np.where(keep > 0)
+        keep = torch.nonzero(keep > 0).flatten()
         bboxes = bboxes[keep]
         scores = scores[keep]
         labels = labels[keep]
@@ -245,8 +246,8 @@ class MyYOLO(nn.Module):
         bboxes = torch.clamp(bboxes, 0., 1.)
 
         # 将预测放在cpu处理上，以便进行后处理
-        scores = scores.to('cpu').numpy()
-        bboxes = bboxes.to('cpu').numpy()
+        scores = scores.to('cpu')
+        bboxes = bboxes.to('cpu')
 
         # 后处理
         bboxes, scores, labels = self.postprocess(bboxes, scores)
@@ -275,7 +276,7 @@ class MyYOLO(nn.Module):
 
             # 从pred中分离出objectness预测、类别class预测、bbox的txtytwth预测
             # [B, H*W, 1]
-            conf_pred = pred[..., 1]
+            conf_pred = pred[..., 1][..., None]
             # [B, H*W, num_cls]
             cls_pred = pred[..., 1:1 + self.num_classes]
             # [B, H*W, 4]
