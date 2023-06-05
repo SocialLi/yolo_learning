@@ -178,27 +178,29 @@ class VOCDetection(data.Dataset):
 
 
 if __name__ == '__main__':
-    from transform import BaseTransform
+    from transform import BaseTransform, Augmentation
 
     img_size = 640
     pixel_mean = (0.406, 0.456, 0.485)  # BGR
     pixel_std = (0.225, 0.224, 0.229)  # BGR
-    data_root = 'D:/code/PycharmProjects/yolo_learning/data/dataset/VOCdevkit'
+    data_root = '/home/zeyi/PycharmProjects/yolo_learning/data/dataset/VOCdevkit'
+    train_transform = Augmentation(img_size, pixel_mean, pixel_std)
     val_transform = BaseTransform(img_size, pixel_mean, pixel_std)
 
     dataset = VOCDetection(
         root=data_root,
         img_size=img_size,
         image_sets=[('2012', 'trainval')],
-        transform=val_transform
+        transform=train_transform
     )
 
     for i in range(10):
+        # dataset返回增强后图像的维度顺序是CHW,同时通道顺序为RGB
         im, gt, h, w = dataset.pull_item(i)
 
-        # to numpy
+        # CHW -> HWC
         image: NDArray = im.permute(1, 2, 0).numpy()
-        # to BGR
+        # RGB -> BGR
         image = image[..., (2, 1, 0)]
         # denormalize
         image = (image * pixel_std + pixel_mean) * 255
