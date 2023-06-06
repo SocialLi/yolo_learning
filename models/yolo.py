@@ -4,7 +4,7 @@ import numpy as np
 from backbone import build_resnet
 from .basic import Conv, SPP
 from .loss import compute_loss
-from typing import List
+from typing import List, Tuple
 
 
 class MyYOLO(nn.Module):
@@ -150,7 +150,8 @@ class MyYOLO(nn.Module):
 
         return keep
 
-    def postprocess(self, bboxes: Tensor, scores: Tensor):
+    def postprocess(self, bboxes, scores):
+        # type: (Tensor, Tensor) -> Tuple[Tensor, Tensor, Tensor]
         """
         Input:
             bboxes: [HxW, 4]

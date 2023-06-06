@@ -1,1 +1,1 @@
-python train.py --cuda -d voc -bs 4 -accu 16
+python train.py --cuda -d voc -bs 8 -accu 8 -ms

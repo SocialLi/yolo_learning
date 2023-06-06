@@ -121,7 +121,7 @@ def compute_loss(pred_conf, pred_cls, pred_txtytwth, targets):
     :param pred_conf: [B, HW, 1]
     :param pred_cls: [B, HW, num_classes]
     :param pred_txtytwth: [B, HW, 4]
-    :param targets:
+    :param targets:  Tensor[B, H*W, 1+1+4+1]
     :return:
     """
     batch_size = pred_conf.size(0)

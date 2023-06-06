@@ -194,7 +194,7 @@ if __name__ == '__main__':
     dataset = VOCDetection(
         root=data_root,
         img_size=img_size,
-        image_sets=[('2012', 'trainval')],
+        image_sets=[('2007', 'trainval')],
         transform=train_transform
     )
 
