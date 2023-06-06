@@ -31,7 +31,7 @@ class VOCAPIEvaluator:
         self.devkit_path = os.path.join(data_root, folder)
         self.annopath = os.path.join(self.devkit_path, 'Annotations', '%s.xml')
         self.imgpath = os.path.join(self.devkit_path, 'JPEGImages', '%s.jpg')
-        self.imgsetpath = os.path.join(self.devkit_path, 'ImageSets', 'Main', set_type + '.xml')
+        self.imgsetpath = os.path.join(self.devkit_path, 'ImageSets', 'Main', set_type + '.txt')
         self.output_dir = self.get_output_dir('voc_eval/', self.set_type)
 
         # dataset
